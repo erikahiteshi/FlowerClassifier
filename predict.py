@@ -14,14 +14,22 @@ from matplotlib.ticker import FormatStrFormatter
 import json
 import argparse
 from collections import OrderedDict
+from torch.autograd import Variable
 
 def load_checkpoint(args):
     checkpoint = torch.load(args.saved_model)
     learning_rate = checkpoint['learning_rate']
     class_to_idx = checkpoint['class_to_idx']
-    
-    model = models.densenet121(pretrained=True);
-    
+
+#    model = models.densenet121(pretrained=True);
+    model_name = checkpoint['arch']
+   
+    if model_name == 'densenet121':
+       model = models.densenet121(pretrained=True)
+
+    else:
+        print("model is not available")
+   
     for param in model.parameters(): 
         param.requires_grad = False
         
@@ -29,11 +37,13 @@ def load_checkpoint(args):
     model.classifier = checkpoint['classifier']
     model.load_state_dict(checkpoint['state_dict'])
     
+    print(model.classifier)
     if args.use_gpu:
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
-        
+    
+    print(device)
     print("checkpoint loaded")
     return model
 
@@ -45,6 +55,7 @@ def process_image(args):
     expects_std = [0.229, 0.224, 0.225]
     print(type(args.image_path))
     pil_image = Image.open(args.image_path)
+    
     np_image = np.array(pil_image)
    
     imagetransforms = transforms.Compose([transforms.Resize(256),
@@ -86,23 +97,20 @@ def predict(args, model, loaded_json):
     # Implemented the code to predict the class from an image file
     # Evaluation mode - we don't want dropout included in this
     model.eval()
-    # Change to CPU mode
-    #model.to("cpu")
-    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
     # load image as torch.Tensor using the process_image function
     image = process_image(args)
     pytorch_tensor = torch.tensor(image)
     pytorch_tensor = pytorch_tensor.float()
     pytorch_tensor_image = pytorch_tensor.unsqueeze(0)   
+    inputimage = Variable(pytorch_tensor_image)
+    inputimage = inputimage.to(device)
     # Disabling gradient calculation as this is not required in evaluation mode
     with torch.no_grad():
         
-        #model to cpu
-        model.to("cpu")
-        
         #get the output of the model
-        output = model.forward(pytorch_tensor_image)
-        
+        output = model.forward(inputimage)
         
         #get the probabilities
         ps = torch.exp(output)
@@ -111,12 +119,15 @@ def predict(args, model, loaded_json):
         top_probs, top_labels = ps.topk(args.topk)
         
         #separate our top predictions/labels into a list
-        top_predictions = top_probs.detach().numpy().tolist()
+       # top_predictions = torch.exp(output).data
+       # top_predictions = top_probs.detach().numpy().tolist()
+        
         top_labels = top_labels.tolist()
-        print(top_predictions, top_labels)
+        top_predictions = top_probs.tolist()
+        print(top_predictions)
+        print(top_labels)
         
         #Put these lists into a dataframe and link with our json file which has the names of flowers
-        
         #match up our class outputs to the names in the json
         classprediction = pd.DataFrame({'class':pd.Series(model.class_to_idx),'flower_name':pd.Series(loaded_json)})
         classprediction = classprediction.set_index('class')
@@ -139,6 +150,8 @@ def main():
     args = parser.parse_args()
     model = load_checkpoint(args)
     print(args.image_path)
+    image = args.image_path
+    
     loaded_json = read_category_names(args)
     predict(args, model, loaded_json)
     

@@ -170,7 +170,7 @@ def train_wrapper(args):
 def main():
     parser = argparse.ArgumentParser(description='Flower Classification trainer')
     parser.add_argument('--gpu', type=bool, default=False, help='Is GPU available')
-    parser.add_argument('--arch', type=str, default='densenet', help='architecture [available: densenet, vgg]', required=True)
+    parser.add_argument('--arch', type=str, default='densenet121', help='architecture [available: densenet, vgg]', required=True)
     parser.add_argument('--hidden_layers', type=int, default=512, help='Number of hidden layers in model')
     parser.add_argument('--lr', type=float, default=0.003, help='learning rate')
     parser.add_argument('--epochs', type=int, default=3, help='number of epochs')
